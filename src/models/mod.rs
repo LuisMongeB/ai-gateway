@@ -50,7 +50,7 @@ pub struct OllamaRequest {
 }
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OllamaResponse {
     pub model: String,
     pub created_at: String,
