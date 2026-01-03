@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use std::pin::Pin;
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use bytes::Bytes;
 use crate::models::{
     ChatCompletionRequest, ChatCompletionResponse,
     OllamaRequest, OllamaResponse,
-    Choice, Usage
+    Choice, Usage, OllamaStreamChunk, ChatCompletionChunk, ChunkChoice, Delta
 };
 use crate::providers::{LLMProvider, ProviderError};
 use uuid::Uuid;
@@ -14,13 +14,13 @@ use reqwest::Client;
 use log::info;
 
 pub struct OllamaProvider {
-    client: reqwest::Client,
+    client: Client,
     base_url: String,
 }
 
 impl OllamaProvider {
     pub fn new(base_url: String) -> Self {
-        let client = reqwest::Client::new();
+        let client = Client::new();
         
         Self {
             client,
@@ -87,7 +87,86 @@ impl LLMProvider for OllamaProvider {
     }
 
     async fn chat_stream(&self, req: ChatCompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes, ProviderError>> + Send>>, ProviderError> {
-        todo!()
+        let ollama_request = OllamaRequest {
+            model: req.model.clone(),
+            messages: req.messages,
+            stream: true,
+        };
+
+        info!("Calling provider...");
+        let response = self.client
+            .post(format!("{}/api/chat", self.base_url))
+            .json(&ollama_request)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Network(e.to_string()))?;
+
+        let response_id = format!("chatcmpl-{}", Uuid::new_v4());
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let model_name = req.model;
+        
+        let sse_stream = async_stream::stream! {
+            let mut byte_stream = response.bytes_stream();
+
+            while let Some(chunk_result) = byte_stream.next().await {
+                match chunk_result {
+                    Ok(bytes) => {
+                        let text = String::from_utf8_lossy(&bytes);
+
+                        for line in text.lines() {
+                            if line.trim().is_empty() {
+                                continue;
+                            }
+
+                            match serde_json::from_str::<OllamaStreamChunk>(line) {
+                                Ok(ollama_chunk) => {
+                                    if ollama_chunk.message.content.is_empty() && !ollama_chunk.done {
+                                        continue;
+                                    }
+
+                                    let openai_chunk = ChatCompletionChunk {
+                                        id: response_id.clone(),
+                                        object: String::from("chat.completion.chunk"),
+                                        created: timestamp,
+                                        model: model_name.clone(),
+                                        choices: vec![ChunkChoice {
+                                            index: 0,
+                                            delta: Delta {
+                                                role: None,
+                                                content: ollama_chunk.message.content,
+                                            },
+                                            finish_reason: if ollama_chunk.done {
+                                                Some(String::from("stop"))
+                                            } else {
+                                                None
+                                            },
+                                        }],
+                                    };
+
+                                    let json = serde_json::to_string(&openai_chunk).unwrap();
+                                    let sse_event = format!("data: {}\n\n", json);
+                                    yield Ok::<_, ProviderError>(Bytes::from(sse_event));
+                                }
+                                Err(e) => {
+                                    info!("Failed to parse chunk: {}", e);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        info!("Stream error: {}", e);
+                        break;
+                    }
+                }
+            }
+            yield Ok::<_, ProviderError>(Bytes::from("data: [DONE]\n\n"));
+        };
+
+        Ok(Box::pin(sse_stream))
     }
 }
 
