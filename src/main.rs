@@ -1,5 +1,6 @@
 mod models;
 mod handlers;
+mod providers;
 
 use handlers::chat_completions;
 
