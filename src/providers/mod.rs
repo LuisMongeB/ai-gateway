@@ -3,6 +3,8 @@ use std::fmt;
 use futures::Stream;
 use bytes::Bytes;
 use async_trait::async_trait;
+pub mod ollama;
+pub mod openai;
 
 use crate::models::{ChatCompletionRequest, ChatCompletionResponse};
 
@@ -30,10 +32,9 @@ impl fmt::Display for ProviderError {
 
 impl std::error::Error for ProviderError {}
 
-pub mod ollama;
-
 #[async_trait]
 pub trait LLMProvider: Send + Sync {
     async fn chat(&self, req: ChatCompletionRequest) -> Result<ChatCompletionResponse, ProviderError>;
     async fn chat_stream(&self, req: ChatCompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes, ProviderError>> + Send>>, ProviderError>;
 }
+
