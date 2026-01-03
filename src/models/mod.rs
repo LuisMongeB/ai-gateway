@@ -8,14 +8,14 @@ pub struct Message {
     pub content: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Choice {
     pub index: u32,
     pub message: Message,
     pub finish_reason: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
@@ -38,7 +38,7 @@ pub struct ChunkChoice {
 
 // OpenAI
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChatCompletionRequest {
     pub model: String,
     pub messages: Vec<Message>,
@@ -46,7 +46,7 @@ pub struct ChatCompletionRequest {
     pub stream: Option<bool>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChatCompletionResponse {
     pub id: String,
     pub object: String,
