@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 
 pub async fn chat_completions(
-    provider: web::Data<Arc<dyn LLMProvider>>,
+    provider: web::Data<dyn LLMProvider>,
     body: web::Json<ChatCompletionRequest>,
 ) -> HttpResponse {
     let request = body.into_inner();
