@@ -7,6 +7,7 @@ use crate::models::{ChatCompletionRequest, ChatCompletionResponse};
 use crate::providers::{LLMProvider, ProviderError};
 use log::info;
 
+#[derive(Clone)]
 pub struct OpenAIProvider {
     client: reqwest::Client,
     base_url: String,
