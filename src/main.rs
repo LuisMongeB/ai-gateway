@@ -39,13 +39,14 @@ async fn main() -> std::io::Result<()> {
         _ => panic!("Unknown provider: {}", provider_type),
     };
 
-    let provider_data = web::Data::new(provider);
+    let provider_data = web::Data::from(provider);
 
     info!("Starting AI Gateway at https://localhost:8080");
 
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(provider_data.clone()))
+            .wrap(Logger::default())
+            .app_data(provider_data.clone())
             .route("/health", web::get().to(health))
             .route("/v1/chat/completions", web::post().to(chat_completions))
     })
