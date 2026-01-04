@@ -1,9 +1,12 @@
 mod models;
 mod handlers;
 mod providers;
+mod middleware;
 
 use handlers::chat_completions;
 use providers::{openai::OpenAIProvider, ollama::OllamaProvider, LLMProvider};
+use crate::middleware::AuthMiddleware;
+
 
 use actix_web::{web, App, HttpServer, HttpResponse, middleware::Logger};
 use log::info;
@@ -21,6 +24,18 @@ async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
     dotenv().ok();
+
+    let raw_keys = env::var("GATEWAY_API_KEYS").unwrap_or_else(|_| "secret-key".to_string());
+
+    // 2. Parse into a list (Split by comma!)
+    let api_keys: Vec<String> = raw_keys
+        .split(',')                           // Split at every comma
+        .map(|s| s.trim().to_string())        // Remove spaces
+        .filter(|s| !s.is_empty())            // Ignore empty strings
+        .collect();
+    
+
+    info!("Loaded {} API keys.", api_keys.len());
 
     let provider_type = env::var("AI_PROVIDER").unwrap_or("ollama".to_string());
 
@@ -46,6 +61,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
+            .wrap(AuthMiddleware::new(api_keys.clone()))
             .app_data(provider_data.clone())
             .route("/health", web::get().to(health))
             .route("/v1/chat/completions", web::post().to(chat_completions))
