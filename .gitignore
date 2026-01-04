@@ -1,6 +1,12 @@
+# Build artifacts
 /target
 **/*.rs.bk
+
+# Dependencies
 Cargo.lock
+
+# Environment (contains secrets)
 .env
+
+# macOS
 .DS_Store
-.env
