@@ -10,16 +10,26 @@ use std::pin::Pin;
 
 use log::info;
 
+#[derive(Debug, Clone)]
+pub enum ApiKeyRole {
+    User,
+    Admin,
+}
+
 #[derive(Clone)]
-pub struct ValidatedApiKey(pub String);
+pub struct ValidatedApiKey {
+    pub key: String,
+    pub role: ApiKeyRole,
+}
 
 pub struct AuthMiddleware {
     api_keys: Vec<String>,
+    admin_keys: Vec<String>,
 }
 
 impl AuthMiddleware {
-    pub fn new(api_keys: Vec<String>) -> Self {
-        Self { api_keys }
+    pub fn new(api_keys: Vec<String>, admin_keys: Vec<String>) -> Self {
+        Self { api_keys: api_keys, admin_keys }
     }
 }
 
@@ -38,7 +48,8 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ready(Ok(AuthMiddlewareService {
             service,
-            api_keys: self.api_keys.clone()
+            api_keys: self.api_keys.clone(),
+            admin_keys: self.admin_keys.clone(),
         }))
     }
 }
@@ -46,6 +57,7 @@ where
 pub struct AuthMiddlewareService<S> {
     service: S,
     api_keys: Vec<String>,
+    admin_keys: Vec<String>,
 }
 
 impl <S, B> Service<ServiceRequest> for AuthMiddlewareService<S>
@@ -74,21 +86,32 @@ where
             .and_then(|s| s.strip_prefix("Bearer "))
             .map(|t| t.to_string());
 
-        let is_valid = token
-            .as_ref()
-            .map(|t| self.api_keys.contains(t))
-            .unwrap_or(false);
+        let role = token.as_ref().and_then(|t| {
+            if self.admin_keys.contains(t) {
+                Some(ApiKeyRole::Admin)
+            } else if self.api_keys.contains(t) {
+                Some(ApiKeyRole::User)
+            } else {
+                None
+            }
+        }); 
 
-        if is_valid {
-            info!("Auth Success!");
-            req.extensions_mut().insert(ValidatedApiKey(token.unwrap()));
-            let fut = self.service.call(req);
-            Box::pin(async move { fut.await })
-        } else {
-            info!("Auth Failed. Token extracted. {:?}", token);
-            Box::pin(async move {
-                Err(ErrorUnauthorized("Invalid or missing API key"))
-            })
+        match role {
+            Some(r) => {
+                info!("Auth Success! Role: {:?}", r);
+                req.extensions_mut().insert(ValidatedApiKey {
+                    key: token.unwrap(),
+                    role: r,
+                });
+                let fut = self.service.call(req);
+                Box::pin(async move { fut.await })
+            }
+            None => {
+                info!("Auth Failed. Token extracted: {:?}", token);
+                Box::pin(async move {
+                    Err(ErrorUnauthorized("Invalid or missing API key"))
+                })
+            }
         }
     }
 }
