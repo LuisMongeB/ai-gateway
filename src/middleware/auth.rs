@@ -1,7 +1,7 @@
 use actix_web::{
     HttpResponse,
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
-    Error,
+    Error, HttpMessage
 };
 use actix_web::error::ErrorUnauthorized;
 use std::future::{ready, Ready};
@@ -9,6 +9,9 @@ use std::task::{Context, Poll};
 use std::pin::Pin;
 
 use log::info;
+
+#[derive(Clone)]
+pub struct ValidatedApiKey(pub String);
 
 pub struct AuthMiddleware {
     api_keys: Vec<String>,
@@ -78,6 +81,7 @@ where
 
         if is_valid {
             info!("Auth Success!");
+            req.extensions_mut().insert(ValidatedApiKey(token.unwrap()));
             let fut = self.service.call(req);
             Box::pin(async move { fut.await })
         } else {

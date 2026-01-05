@@ -2,15 +2,16 @@ mod models;
 mod handlers;
 mod providers;
 mod middleware;
+mod tracking;
 
 use handlers::chat_completions;
 use providers::{openai::OpenAIProvider, ollama::OllamaProvider, LLMProvider};
-use crate::middleware::AuthMiddleware;
+use crate::{middleware::{AuthMiddleware, TrackingMiddleware}, tracking::RequestTracker};
 
 
 use actix_web::{web, App, HttpServer, HttpResponse, middleware::Logger};
 use log::info;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use dotenv::dotenv;
 use std::env;
 
@@ -58,11 +59,16 @@ async fn main() -> std::io::Result<()> {
 
     info!("Starting AI Gateway at https://localhost:8080");
 
+    let request_tracker = Arc::new(RwLock::new(RequestTracker::new()));
+    let request_data = web::Data::from(request_tracker.clone());
+
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
             .wrap(AuthMiddleware::new(api_keys.clone()))
+            .wrap(TrackingMiddleware::new(request_tracker.clone()))
             .app_data(provider_data.clone())
+            .app_data(request_data.clone())
             .route("/health", web::get().to(health))
             .route("/v1/chat/completions", web::post().to(chat_completions))
     })
