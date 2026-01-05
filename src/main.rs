@@ -27,6 +27,7 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
     let raw_keys = env::var("GATEWAY_API_KEYS").unwrap_or_else(|_| "secret-key".to_string());
+    let raw_admin_keys = env::var("ADMIN_API_KEYS").unwrap_or_else(|_| String::new());
 
     // 2. Parse into a list (Split by comma!)
     let api_keys: Vec<String> = raw_keys
@@ -34,9 +35,17 @@ async fn main() -> std::io::Result<()> {
         .map(|s| s.trim().to_string())        // Remove spaces
         .filter(|s| !s.is_empty())            // Ignore empty strings
         .collect();
+
+    // Parse admin keys
+    let admin_keys: Vec<String> = raw_admin_keys
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
     
 
     info!("Loaded {} API keys.", api_keys.len());
+    info!("Loaded {} admin API keys.", admin_keys.len());
 
     let provider_type = env::var("AI_PROVIDER").unwrap_or("ollama".to_string());
 
@@ -65,7 +74,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .wrap(AuthMiddleware::new(api_keys.clone()))
+            .wrap(AuthMiddleware::new(api_keys.clone(), admin_keys.clone()))
             .wrap(TrackingMiddleware::new(request_tracker.clone()))
             .app_data(provider_data.clone())
             .app_data(request_data.clone())
