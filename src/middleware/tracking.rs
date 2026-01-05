@@ -1,6 +1,7 @@
 use std::time::Instant;
 use std::sync::{Arc, RwLock};
 use crate::tracking::RequestTracker;
+use crate::middleware::auth::ValidatedApiKey;
 use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     Error, HttpMessage
@@ -11,7 +12,7 @@ use std::pin::Pin;
 use log::info;
 
 #[derive(Clone)]
-pub struct ValidatedApiKey(pub String);
+
 
 pub struct TrackingMiddleware {
     tracker: Arc<RwLock<RequestTracker>>,
@@ -65,7 +66,7 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let api_key = req.extensions()
             .get::<ValidatedApiKey>()
-            .map(|k| k.0.clone())
+            .map(|k| k.key.clone())
             .unwrap_or_else(|| "unknown".to_string());
 
         let tracker = self.tracker.clone();
