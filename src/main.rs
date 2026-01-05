@@ -4,7 +4,7 @@ mod providers;
 mod middleware;
 mod tracking;
 
-use handlers::chat_completions;
+use handlers::{chat_completions, get_stats};
 use providers::{openai::OpenAIProvider, ollama::OllamaProvider, LLMProvider};
 use crate::{middleware::{AuthMiddleware, TrackingMiddleware}, tracking::RequestTracker};
 
@@ -31,9 +31,9 @@ async fn main() -> std::io::Result<()> {
 
     // 2. Parse into a list (Split by comma!)
     let api_keys: Vec<String> = raw_keys
-        .split(',')                           // Split at every comma
-        .map(|s| s.trim().to_string())        // Remove spaces
-        .filter(|s| !s.is_empty())            // Ignore empty strings
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty()) 
         .collect();
 
     // Parse admin keys
@@ -80,6 +80,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(request_data.clone())
             .route("/health", web::get().to(health))
             .route("/v1/chat/completions", web::post().to(chat_completions))
+            .route("/v1/stats", web::get().to(get_stats))
     })
     .bind("127.0.0.1:8080")?
     .run()
