@@ -1,20 +1,21 @@
-mod models;
 mod handlers;
-mod providers;
 mod middleware;
+mod models;
+mod providers;
 mod tracking;
 
+use crate::{
+    middleware::{AuthMiddleware, TrackingMiddleware},
+    tracking::RequestTracker,
+};
 use handlers::{chat_completions, get_stats};
-use providers::{openai::OpenAIProvider, ollama::OllamaProvider, LLMProvider};
-use crate::{middleware::{AuthMiddleware, TrackingMiddleware}, tracking::RequestTracker};
+use providers::{ollama::OllamaProvider, openai::OpenAIProvider, LLMProvider};
 
-
-use actix_web::{web, App, HttpServer, HttpResponse, middleware::Logger};
-use log::info;
-use std::sync::{Arc, RwLock};
+use actix_web::{middleware::Logger, web, App, HttpResponse, HttpServer};
 use dotenv::dotenv;
+use log::info;
 use std::env;
-
+use std::sync::{Arc, RwLock};
 
 async fn health() -> HttpResponse {
     HttpResponse::Ok().body("ok")
@@ -33,7 +34,7 @@ async fn main() -> std::io::Result<()> {
     let api_keys: Vec<String> = raw_keys
         .split(',')
         .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty()) 
+        .filter(|s| !s.is_empty())
         .collect();
 
     // Parse admin keys
@@ -42,7 +43,6 @@ async fn main() -> std::io::Result<()> {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
-    
 
     info!("Loaded {} API keys.", api_keys.len());
     info!("Loaded {} admin API keys.", admin_keys.len());
@@ -58,7 +58,8 @@ async fn main() -> std::io::Result<()> {
             Arc::new(OpenAIProvider::new(base_url, api_key))
         }
         "ollama" => {
-            let base_url = env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
+            let base_url = env::var("OLLAMA_BASE_URL")
+                .unwrap_or_else(|_| "http://localhost:11434".to_string());
             Arc::new(OllamaProvider::new(base_url))
         }
         _ => panic!("Unknown provider: {}", provider_type),
@@ -74,8 +75,8 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .wrap(AuthMiddleware::new(api_keys.clone(), admin_keys.clone()))
             .wrap(TrackingMiddleware::new(request_tracker.clone()))
+            .wrap(AuthMiddleware::new(api_keys.clone(), admin_keys.clone()))
             .app_data(provider_data.clone())
             .app_data(request_data.clone())
             .route("/health", web::get().to(health))
