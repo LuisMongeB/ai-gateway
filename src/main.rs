@@ -13,9 +13,9 @@ use providers::{ollama::OllamaProvider, openai::OpenAIProvider, LLMProvider};
 
 use actix_web::{middleware::Logger, web, App, HttpResponse, HttpServer};
 use dotenv::dotenv;
-use log::info;
 use std::env;
 use std::sync::{Arc, RwLock};
+use tracing::info;
 
 async fn health() -> HttpResponse {
     HttpResponse::Ok().body("ok")
@@ -23,7 +23,18 @@ async fn health() -> HttpResponse {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    let log_format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| "text".to_string());
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+
+    if log_format.to_lowercase() == "json" {
+        tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(env_filter)
+            .init();
+    } else {
+        tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    }
 
     dotenv().ok();
 

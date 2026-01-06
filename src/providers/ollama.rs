@@ -6,10 +6,10 @@ use crate::providers::{LLMProvider, ProviderError};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
-use log::info;
 use reqwest::Client;
 use std::pin::Pin;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::info;
 use uuid::Uuid;
 
 pub struct OllamaProvider {

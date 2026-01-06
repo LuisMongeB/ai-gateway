@@ -3,7 +3,7 @@ use crate::models::{ChatCompletionRequest};
 use crate::providers::{LLMProvider, ProviderError};
 use crate::tracking::RequestTracker;
 use crate::middleware::auth::ValidatedApiKey;
-use log::{info, error};
+use tracing::{info, error};
 use std::sync::RwLock;
 use futures::StreamExt;
 
@@ -75,9 +75,13 @@ pub async fn chat_completions(
                     // Acquire write lock and record
                     if let Ok(mut tracker) = request_tracker.write() {
                         tracker.record_tokens(api_key, prompt_tokens, completion_tokens, &model);
-                        info!("Recorded {} tokens for key ending in ...{}", 
-                            prompt_tokens + completion_tokens, 
-                            &api_key[api_key.len().saturating_sub(4)..]);
+                        info!(
+                            api_key = %api_key,
+                            prompt_tokens = prompt_tokens,
+                            completion_tokens = completion_tokens,
+                            model = %model,
+                            "Recorded tokens"
+                        );
                     } else {
                         error!("Failed to acquire write lock on RequestTracker");
                     }
