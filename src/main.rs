@@ -76,25 +76,59 @@ async fn main() -> std::io::Result<()> {
         _ => panic!("Unknown provider: {}", provider_type),
     };
 
-    let provider_data = web::Data::from(provider);
-
     info!("Starting AI Gateway at https://localhost:8080");
 
-    let request_tracker = Arc::new(RwLock::new(RequestTracker::new()));
-    let request_data = web::Data::from(request_tracker.clone());
+    // Load request tracker from file or create new
+    let request_tracker = match RequestTracker::load_from_file("stats.json") {
+        Ok(tracker) => {
+            info!("Loaded existing request stats from stats.json");
+            Arc::new(RwLock::new(tracker))
+        }
+        Err(_) => {
+            info!("No existing stats found, starting fresh");
+            Arc::new(RwLock::new(RequestTracker::new()))
+        }
+    };
 
-    HttpServer::new(move || {
+    let tracker_for_server = request_tracker.clone();
+    let api_keys_for_server = api_keys.clone();
+    let admin_keys_for_server = admin_keys.clone();
+    let provider_for_server = provider.clone();
+
+    let server = HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .wrap(TrackingMiddleware::new(request_tracker.clone()))
-            .wrap(AuthMiddleware::new(api_keys.clone(), admin_keys.clone()))
-            .app_data(provider_data.clone())
-            .app_data(request_data.clone())
-            .route("/health", web::get().to(health))
-            .route("/v1/chat/completions", web::post().to(chat_completions))
-            .route("/v1/stats", web::get().to(get_stats))
+            .wrap(TrackingMiddleware::new(tracker_for_server.clone()))
+            .wrap(AuthMiddleware::new(
+                api_keys_for_server.clone(),
+                admin_keys_for_server.clone(),
+            ))
+            // We need to wrap in web::Data here explicitly or inside the App?
+            // In the previous code: `app_data(web::Data::new(request_tracker.clone()))`
+            // `tracker_for_server` is `Arc<RwLock<...>>`. `web::Data` wants to wrap it.
+            .app_data(web::Data::from(tracker_for_server.clone()))
+            .app_data(web::Data::from(provider_for_server.clone()))
+            .service(
+                web::scope("/v1")
+                    .route("/health", web::get().to(health))
+                    .route("/chat/completions", web::post().to(chat_completions))
+                    .route("/stats", web::get().to(get_stats)),
+            )
     })
-    .bind("127.0.0.1:8080")?
-    .run()
-    .await
+    .bind(("127.0.0.1", 8080))?
+    .run();
+
+    info!("Server running at http://127.0.0.1:8080");
+
+    server.await?;
+
+    info!("Server shutting down, saving stats...");
+    // Save the request tracker before exiting
+    if let Err(e) = request_tracker.read().unwrap().save_to_file("stats.json") {
+        eprintln!("Failed to save request stats: {}", e);
+    } else {
+        info!("Request stats saved to stats.json");
+    }
+
+    Ok(())
 }

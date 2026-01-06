@@ -1,15 +1,17 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufReader;
 use std::time::SystemTime;
-use serde::Serialize;
 
 /// Tracks request metrics across all API keys
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct RequestTracker {
     stats: HashMap<String, KeyStats>,
 }
 
 /// Per-API-key statistics
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KeyStats {
     pub request_count: u64,
     pub error_count: u64,
@@ -42,14 +44,25 @@ impl RequestTracker {
         }
     }
 
+    pub fn load_from_file(path: &str) -> std::io::Result<Self> {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let tracker = serde_json::from_reader(reader)?;
+        Ok(tracker)
+    }
+
+    pub fn save_to_file(&self, path: &str) -> std::io::Result<()> {
+        let file = File::create(path)?;
+        serde_json::to_writer_pretty(file, self)?;
+        Ok(())
+    }
+
     /// Record a completed request (called by middleware after response)
-    pub fn record_request(
-        &mut self,
-        api_key: &str,
-        latency_ms: u64,
-        is_error: bool,
-    ) {
-        let stats = self.stats.entry(api_key.to_string()).or_insert_with(KeyStats::new);
+    pub fn record_request(&mut self, api_key: &str, latency_ms: u64, is_error: bool) {
+        let stats = self
+            .stats
+            .entry(api_key.to_string())
+            .or_insert_with(KeyStats::new);
         stats.request_count += 1;
         stats.total_latency_ms += latency_ms;
         stats.last_request_timestamp = SystemTime::now();
@@ -66,7 +79,10 @@ impl RequestTracker {
         completion_tokens: u64,
         model: &str,
     ) {
-        let stats = self.stats.entry(api_key.to_string()).or_insert_with(KeyStats::new);
+        let stats = self
+            .stats
+            .entry(api_key.to_string())
+            .or_insert_with(KeyStats::new);
         stats.total_prompt_tokens += prompt_tokens;
         stats.total_completion_tokens += completion_tokens;
         *stats.models_used.entry(model.to_string()).or_insert(0) += 1;
@@ -83,10 +99,10 @@ impl RequestTracker {
     }
 }
 
-/// Custom serializer for SystemTime as milliseconds since UNIX epoch
+/// Custom serializer/deserializer for SystemTime as milliseconds since UNIX epoch
 mod system_time_as_millis {
-    use serde::{Serializer, Serialize};
-    use std::time::SystemTime;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::{Duration, SystemTime};
 
     pub fn serialize<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -97,5 +113,13 @@ mod system_time_as_millis {
             .unwrap_or_default()
             .as_millis() as u64;
         millis.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let millis = u64::deserialize(deserializer)?;
+        Ok(SystemTime::UNIX_EPOCH + Duration::from_millis(millis))
     }
 }
