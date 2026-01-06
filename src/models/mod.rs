@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 // Shared
 
@@ -22,14 +22,14 @@ pub struct Usage {
     pub total_tokens: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Delta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     pub content: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChunkChoice {
     pub index: u32,
     pub delta: Delta,
@@ -56,13 +56,15 @@ pub struct ChatCompletionResponse {
     pub usage: Usage,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChatCompletionChunk {
     pub id: String,
     pub object: String,
     pub created: u64,
     pub model: String,
     pub choices: Vec<ChunkChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
 }
 
 // Ollama
@@ -90,4 +92,6 @@ pub struct OllamaStreamChunk {
     pub model: String,
     pub message: Message,
     pub done: bool,
+    pub prompt_eval_count: Option<u32>,
+    pub eval_count: Option<u32>,
 }
