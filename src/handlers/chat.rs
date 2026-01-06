@@ -31,11 +31,6 @@ pub async fn chat_completions(
 
                 let stream = stream.map(move |result| {
                     if let Ok(bytes) = &result {
-                        // Inspect the chunk for usage
-                        // We need to parse "data: {json}\n\n"
-                        // This is a bit fragile if we just search for substring, but full parse is safer.
-                        // The bytes format is "data: encoded_json\n\n"
-                        // Let's try to strip prefix/suffix and parse.
                         
                         let s = String::from_utf8_lossy(bytes);
                         if s.starts_with("data: ") && !s.contains("[DONE]") {
@@ -56,7 +51,6 @@ pub async fn chat_completions(
                              }
                         }
                     }
-                    // Convert ProviderError to actix_web::Error if necessary
                     result.map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))
                 });
 
