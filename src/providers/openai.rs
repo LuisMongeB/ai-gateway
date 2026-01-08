@@ -1,11 +1,11 @@
-use std::pin::Pin;
-use futures::{Stream, StreamExt};
-use bytes::Bytes;
-use reqwest::Client;
-use async_trait::async_trait;
 use crate::models::{ChatCompletionRequest, ChatCompletionResponse};
 use crate::providers::{LLMProvider, ProviderError};
+use async_trait::async_trait;
+use bytes::Bytes;
+use futures::{Stream, StreamExt};
 use log::info;
+use reqwest::Client;
+use std::pin::Pin;
 
 #[derive(Clone)]
 pub struct OpenAIProvider {
@@ -28,10 +28,14 @@ impl OpenAIProvider {
 
 #[async_trait]
 impl LLMProvider for OpenAIProvider {
-    async fn chat(&self, req: ChatCompletionRequest) -> Result<ChatCompletionResponse, ProviderError> {
+    async fn chat(
+        &self,
+        req: ChatCompletionRequest,
+    ) -> Result<ChatCompletionResponse, ProviderError> {
         info!("Processing request to OpenAI...");
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/v1/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&req)
@@ -48,10 +52,15 @@ impl LLMProvider for OpenAIProvider {
         Ok(openai_response)
     }
 
-    async fn chat_stream(&self, req: ChatCompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes, ProviderError>> + Send>>, ProviderError> {
+    async fn chat_stream(
+        &self,
+        req: ChatCompletionRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes, ProviderError>> + Send>>, ProviderError>
+    {
         info!("Processing streaming request to OpenAI...");
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/v1/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&req)
@@ -78,4 +87,3 @@ impl LLMProvider for OpenAIProvider {
         Ok(Box::pin(stream))
     }
 }
-

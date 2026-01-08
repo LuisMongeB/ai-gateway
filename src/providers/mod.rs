@@ -1,10 +1,13 @@
-use std::pin::Pin;
-use std::fmt;
-use futures::Stream;
-use bytes::Bytes;
 use async_trait::async_trait;
+use bytes::Bytes;
+use futures::Stream;
+use std::fmt;
+use std::pin::Pin;
+pub mod fallback;
 pub mod ollama;
 pub mod openai;
+
+pub use fallback::FallbackProvider;
 
 use crate::models::{ChatCompletionRequest, ChatCompletionResponse};
 
@@ -12,10 +15,7 @@ use crate::models::{ChatCompletionRequest, ChatCompletionResponse};
 pub enum ProviderError {
     Network(String),
     Parse(String),
-    ProviderError {
-        status: u16,
-        message: String,
-    },
+    ProviderError { status: u16, message: String },
 }
 
 impl fmt::Display for ProviderError {
@@ -34,7 +34,12 @@ impl std::error::Error for ProviderError {}
 
 #[async_trait]
 pub trait LLMProvider: Send + Sync {
-    async fn chat(&self, req: ChatCompletionRequest) -> Result<ChatCompletionResponse, ProviderError>;
-    async fn chat_stream(&self, req: ChatCompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes, ProviderError>> + Send>>, ProviderError>;
+    async fn chat(
+        &self,
+        req: ChatCompletionRequest,
+    ) -> Result<ChatCompletionResponse, ProviderError>;
+    async fn chat_stream(
+        &self,
+        req: ChatCompletionRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Bytes, ProviderError>> + Send>>, ProviderError>;
 }
-

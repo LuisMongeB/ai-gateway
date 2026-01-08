@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 // Shared
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
     pub role: String,
     pub content: String,
@@ -38,7 +38,7 @@ pub struct ChunkChoice {
 
 // OpenAI
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChatCompletionRequest {
     pub model: String,
     pub messages: Vec<Message>,

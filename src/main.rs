@@ -9,7 +9,7 @@ use crate::{
     tracking::RequestTracker,
 };
 use handlers::{chat_completions, get_stats};
-use providers::{ollama::OllamaProvider, openai::OpenAIProvider, LLMProvider};
+use providers::{ollama::OllamaProvider, openai::OpenAIProvider, FallbackProvider, LLMProvider};
 
 use actix_web::{middleware::Logger, web, App, HttpResponse, HttpServer};
 use dotenv::dotenv;
@@ -58,27 +58,28 @@ async fn main() -> std::io::Result<()> {
     info!("Loaded {} API keys.", api_keys.len());
     info!("Loaded {} admin API keys.", admin_keys.len());
 
-    let provider_type = env::var("AI_PROVIDER").unwrap_or("ollama".to_string());
+    let ollama_provider = Arc::new(OllamaProvider::new(
+        env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| "http://localhost:11434".to_string()),
+    ));
 
-    info!("Selected provider: {}", provider_type);
+    let openai_provider =
+        if let (Ok(key), Ok(url)) = (env::var("OPENAI_API_KEY"), env::var("OPENAI_BASE_URL")) {
+            Some(Arc::new(OpenAIProvider::new(url, key)))
+        } else {
+            None
+        };
 
-    let provider: Arc<dyn LLMProvider> = match provider_type.as_str() {
-        "openai" => {
-            let api_key = env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
-            let base_url = env::var("OPENAI_BASE_URL").expect("OPENAI_BASE_URL must be set.");
-            Arc::new(OpenAIProvider::new(base_url, api_key))
-        }
-        "ollama" => {
-            let base_url = env::var("OLLAMA_BASE_URL")
-                .unwrap_or_else(|_| "http://localhost:11434".to_string());
-            Arc::new(OllamaProvider::new(base_url))
-        }
-        _ => panic!("Unknown provider: {}", provider_type),
+    // Default strategy: Try Ollama, allow fallback to OpenAI if configured
+    let provider: Arc<dyn LLMProvider> = if let Some(secondary) = openai_provider {
+        // If we have both, use FallbackProvider
+        Arc::new(FallbackProvider::new(ollama_provider, secondary))
+    } else {
+        // If only Ollama, just use Ollama
+        ollama_provider
     };
 
-    info!("Starting AI Gateway at https://localhost:8080");
+    info!("AI Provider configured. Fallback strategy active if OpenAI keys present.");
 
-    // Load request tracker from file or create new
     let request_tracker = match RequestTracker::load_from_file("stats.json") {
         Ok(tracker) => {
             info!("Loaded existing request stats from stats.json");
