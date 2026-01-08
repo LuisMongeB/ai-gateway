@@ -11,11 +11,20 @@ use tracing::{info, warn};
 pub struct FallbackProvider {
     primary: Arc<dyn LLMProvider>,
     backup: Arc<dyn LLMProvider>,
+    fallback_model: Option<String>,
 }
 
 impl FallbackProvider {
-    pub fn new(primary: Arc<dyn LLMProvider>, backup: Arc<dyn LLMProvider>) -> Self {
-        Self { primary, backup }
+    pub fn new(
+        primary: Arc<dyn LLMProvider>,
+        backup: Arc<dyn LLMProvider>,
+        fallback_model: Option<String>,
+    ) -> Self {
+        Self {
+            primary,
+            backup,
+            fallback_model,
+        }
     }
 }
 
@@ -32,7 +41,15 @@ impl LLMProvider for FallbackProvider {
             Ok(response) => Ok(response),
             Err(e) => {
                 warn!("Primary provider failed: {}. Switching to backup.", e);
-                self.backup.chat(req_clone).await
+
+                // If a fallback model is configured, override the request
+                let mut backup_req = req_clone;
+                if let Some(model) = &self.fallback_model {
+                    info!("Overriding model to '{}' for backup request", model);
+                    backup_req.model = model.clone();
+                }
+
+                self.backup.chat(backup_req).await
             }
         }
     }

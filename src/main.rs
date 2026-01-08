@@ -41,14 +41,12 @@ async fn main() -> std::io::Result<()> {
     let raw_keys = env::var("GATEWAY_API_KEYS").unwrap_or_else(|_| "secret-key".to_string());
     let raw_admin_keys = env::var("ADMIN_API_KEYS").unwrap_or_else(|_| String::new());
 
-    // 2. Parse into a list (Split by comma!)
     let api_keys: Vec<String> = raw_keys
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
 
-    // Parse admin keys
     let admin_keys: Vec<String> = raw_admin_keys
         .split(',')
         .map(|s| s.trim().to_string())
@@ -72,7 +70,12 @@ async fn main() -> std::io::Result<()> {
     // Default strategy: Try Ollama, allow fallback to OpenAI if configured
     let provider: Arc<dyn LLMProvider> = if let Some(secondary) = openai_provider {
         // If we have both, use FallbackProvider
-        Arc::new(FallbackProvider::new(ollama_provider, secondary))
+        // We configure a default OpenAI model for fallback in case the original model (e.g. local LLM) doesn't exist in OpenAI
+        Arc::new(FallbackProvider::new(
+            ollama_provider,
+            secondary,
+            Some("gpt-4.1-nano".to_string()),
+        ))
     } else {
         // If only Ollama, just use Ollama
         ollama_provider
