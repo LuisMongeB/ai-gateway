@@ -5,7 +5,7 @@ mod providers;
 mod tracking;
 
 use crate::{
-    middleware::{AuthMiddleware, TrackingMiddleware},
+    middleware::{AuthMiddleware, RateLimitMiddleware, RateLimiter, TrackingMiddleware},
     tracking::RequestTracker,
 };
 use handlers::{chat_completions, get_stats};
@@ -95,10 +95,18 @@ async fn main() -> std::io::Result<()> {
     let admin_keys_for_server = admin_keys.clone();
     let provider_for_server = provider.clone();
 
+    let rate_limiter = Arc::new(RateLimiter::new(60)); // 60 RPM
+    let rate_limiter_for_server = rate_limiter.clone();
+
     let server = HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
             .wrap(TrackingMiddleware::new(tracker_for_server.clone()))
+            // AuthMiddleware must run BEFORE RateLimitMiddleware to set the key.
+            // Actix middlewares run in REVERSE definition order.
+            // So definition: wrap(RateLimit) -> wrap(Auth)
+            // Execution: Auth -> RateLimit -> Handler
+            .wrap(RateLimitMiddleware::new(rate_limiter_for_server.clone()))
             .wrap(AuthMiddleware::new(
                 api_keys_for_server.clone(),
                 admin_keys_for_server.clone(),

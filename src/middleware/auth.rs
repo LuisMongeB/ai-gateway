@@ -1,12 +1,11 @@
-use actix_web::{
-    HttpResponse,
-    dev::{Service, ServiceRequest, ServiceResponse, Transform},
-    Error, HttpMessage
-};
 use actix_web::error::ErrorUnauthorized;
+use actix_web::{
+    dev::{Service, ServiceRequest, ServiceResponse, Transform},
+    Error, HttpMessage,
+};
 use std::future::{ready, Ready};
-use std::task::{Context, Poll};
 use std::pin::Pin;
+use std::task::{Context, Poll};
 
 use log::info;
 
@@ -29,7 +28,10 @@ pub struct AuthMiddleware {
 
 impl AuthMiddleware {
     pub fn new(api_keys: Vec<String>, admin_keys: Vec<String>) -> Self {
-        Self { api_keys: api_keys, admin_keys }
+        Self {
+            api_keys: api_keys,
+            admin_keys,
+        }
     }
 }
 
@@ -60,7 +62,7 @@ pub struct AuthMiddlewareService<S> {
     admin_keys: Vec<String>,
 }
 
-impl <S, B> Service<ServiceRequest> for AuthMiddlewareService<S>
+impl<S, B> Service<ServiceRequest> for AuthMiddlewareService<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
@@ -69,7 +71,7 @@ where
     type Response = ServiceResponse<B>;
     type Error = Error;
     type Future = Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>>>>;
-    
+
     fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.service.poll_ready(cx)
     }
@@ -94,7 +96,7 @@ where
             } else {
                 None
             }
-        }); 
+        });
 
         match role {
             Some(r) => {
@@ -108,9 +110,7 @@ where
             }
             None => {
                 info!("Auth Failed. Token extracted: {:?}", token);
-                Box::pin(async move {
-                    Err(ErrorUnauthorized("Invalid or missing API key"))
-                })
+                Box::pin(async move { Err(ErrorUnauthorized("Invalid or missing API key")) })
             }
         }
     }
